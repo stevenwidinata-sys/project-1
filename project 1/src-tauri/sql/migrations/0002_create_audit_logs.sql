@@ -1,4 +1,4 @@
-﻿-- 0002_create_audit_logs.sql
+-- 0002_create_audit_logs.sql
 -- Stores an audit entry for each CRUD operation
 
 CREATE TABLE IF NOT EXISTS audit_logs (

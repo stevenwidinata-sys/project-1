@@ -2993,6 +2993,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "chrono",
+ "dotenvy",
  "redis",
  "serde",
  "serde_json",

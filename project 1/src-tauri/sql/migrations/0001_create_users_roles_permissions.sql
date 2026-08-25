@@ -1,4 +1,4 @@
-﻿-- 0001_create_users_roles_permissions.sql
+-- 0001_create_users_roles_permissions.sql
 -- Users, employees, roles, role_permissions, user_roles
 
 CREATE TABLE IF NOT EXISTS roles (

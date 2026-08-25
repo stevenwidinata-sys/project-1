@@ -1,4 +1,4 @@
-﻿-- 0004_create_reports.sql
+-- 0004_create_reports.sql
 -- Stores incoming reports, assigned engineer, and metadata
 
 CREATE TABLE IF NOT EXISTS reports (

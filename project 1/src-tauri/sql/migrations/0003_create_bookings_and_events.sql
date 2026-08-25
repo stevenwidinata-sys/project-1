@@ -1,4 +1,4 @@
-﻿-- 0003_create_bookings_and_events.sql
+-- 0003_create_bookings_and_events.sql
 -- Bookings for performances and restaurant reservations
 
 CREATE TABLE IF NOT EXISTS events (

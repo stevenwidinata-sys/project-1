@@ -28,4 +28,5 @@ redis = { version = "0.23", features = ["tokio-comp"] }
 serde_json = "1.0"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
 
