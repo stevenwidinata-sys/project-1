@@ -7,8 +7,16 @@ use redis::Client as RedisClient;
 use chrono::Utc;
 use dotenvy::dotenv;
 use std::env;
+use sqlx::Row;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+// Argon2 imports for password hashing and verification
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
+
+// Updated User struct derived with sqlx::FromRow to parse DB responses directly
+#[derive(Clone, Serialize, Deserialize, Debug, sqlx::FromRow)]
 pub struct User {
     pub id: i64,
     pub display_name: String,
@@ -27,31 +35,82 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// 1. REGISTER PASSENGER: Hashes password with Argon2 + Salt and inserts into PostgreSQL
 #[tauri::command]
 async fn register_passenger(
     display_name: String,
     email: String,
-    _password: String,
+    password: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let _pool = &state.db;
-    Ok(format!("registered {} <{}>", display_name, email))
+    // Generate a secure random cryptographic salt
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+
+    // Hash the raw password using Argon2id + Salt
+    let password_hash = argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| format!("Password hashing failed: {}", e))?
+        .to_string();
+
+    // Execute INSERT query into the users table
+    sqlx::query(
+        "INSERT INTO users (display_name, email, password_hash, role) VALUES ($1, $2, $3, $4)"
+    )
+    .bind(&display_name)
+    .bind(&email)
+    .bind(&password_hash)
+    .bind("passenger")
+    .execute(&state.db)
+    .await
+    .map_err(|e| format!("Database insertion failed: {}", e))?;
+
+    Ok(format!("Successfully created account for {}!", display_name))
 }
 
+// 2. LOGIN PASSENGER: Fetches user record and verifies incoming password against Argon2 hash
 #[tauri::command]
 async fn login_passenger(
     email: String,
-    _password: String,
+    password: String,
     state: State<'_, AppState>,
 ) -> Result<User, String> {
+    // 1. Fetch record using dynamic query to prevent compile-time schema macro panics
+    let row = sqlx::query(
+        "SELECT id, display_name, email, role, password_hash FROM users WHERE email = $1"
+    )
+    .bind(&email)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?
+    .ok_or_else(|| "User with this email was not found.".to_string())?;
+
+    // Extract columns manually from the SQL row
+    let id: i64 = row.get("id");
+    let display_name: String = row.get("display_name");
+    let user_email: Option<String> = row.get("email");
+    let role: String = row.get("role");
+    let stored_password_hash: String = row.get("password_hash");
+
+    // 2. Parse stored Argon2 hash
+    let parsed_hash = PasswordHash::new(&stored_password_hash)
+        .map_err(|e| format!("Invalid password hash format: {}", e))?;
+
+    // 3. Verify incoming password against the hash + salt
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .map_err(|_| "Invalid password or credentials.".to_string())?;
+
     let user = User {
-        id: 1,
-        display_name: "Demo Passenger".into(),
-        email: Some(email.clone()),
-        role: "passenger".into(),
+        id,
+        display_name,
+        email: user_email,
+        role,
     };
+
     let mut guard = state.logged_in_user.lock().map_err(|e| e.to_string())?;
     *guard = Some(user.clone());
+
     Ok(user)
 }
 
